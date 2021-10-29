@@ -1,5 +1,5 @@
 //****************************************//
-//   IV2 toolbox v1.2.5
+//   IV2 toolbox v1.2.6
 //****************************************//
 
 $.localize = true;
@@ -274,11 +274,11 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
     episodeShotList = JSON.parse( episodeShotList );
     var shotCode = episodeNb + "_" + sequenceNb + "_" + shotNb ;
     var shotExists = false ;
-    var environmentAssetName = "" ;
+    var environmentAssetsNames = "" ;
     for( var i = 0 ; i < episodeShotList.length ; i++ ){
         if( episodeShotList[i].ShotCode == shotCode ){
             shotExists = true ;
-            environmentAssetName = episodeShotList[i].AssetsEnvironment ;
+            environmentAssetsNames = episodeShotList[i].AssetsEnvironment.split(", ") ;
             break ;
         }
     }
@@ -342,27 +342,36 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
         }
     }
     //Importing Environment and placing it in the "Assets" Folder.
-    var environmentItem = null ;
+    var environmentItems = [] ;
+    var missingEnvironment = []
     var environmentAssetsList = new Folder( episodeFolder.fsName + "/01_Assets/04_Environment" ).getFiles( "*.psd" );
-    for( i = 0 ; i < environmentAssetsList.length ; i++ ){
-        if( environmentAssetsList[i].name.search( new RegExp( "_" + environmentAssetName + "_" , "gi") ) >= 0 ){
-            var environmentImportOptns = new ImportOptions( environmentAssetsList[i] )
-            environmentImportOptns.importAs = ImportAsType.COMP ;
-            environmentItem = app.project.importFile( environmentImportOptns );
-            break ;
-        } 
+    for( var h = 0 ; h < environmentAssetsNames.length ; h++ ){
+        for( i = 0 ; i < environmentAssetsList.length ; i++ ){
+            if( environmentAssetsList[i].name.search( new RegExp( "_" + environmentAssetsNames[h] + "_" , "gi") ) >= 0 ){
+                var environmentImportOptns = new ImportOptions( environmentAssetsList[i] )
+                environmentImportOptns.importAs = ImportAsType.COMP ;
+                environmentItems.push( app.project.importFile( environmentImportOptns ) );
+                break ;
+            } else if( i + 1 >= environmentAssetsList.length ){
+                missingEnvironment.push( environmentAssetsNames[h] );
+            }
+        }
     }
-    if( environmentItem != null ){
-        environmentItem.parentFolder = assetsFolderItem ;
-        environmentItem.frameRate = 25 ;
-        var alphaSolver = environmentItem.layers.addSolid( [ 0 , 0 , 0 ] , "alphaSolver" , environmentItem.width , environmentItem.height , 1 , environmentItem.duration );
-        alphaSolver.moveToEnd();
-        environmentLayersFolderItem = findItem( environmentItem.name + " Layers" );
-        environmentLayersFolderItem.parentFolder = assetsFolderItem ;
+    if( environmentItems.length > 0 ){
+        for( h = 0 ; h < environmentItems.length ; h++ ){
+            environmentItems[h].parentFolder = assetsFolderItem ;
+            environmentItems[h].frameRate = 25 ;
+            var alphaSolver = environmentItems[h].layers.addSolid( [ 0 , 0 , 0 ] , "alphaSolver" , environmentItems[h].width , environmentItems[h].height , 1 , environmentItems[h].duration );
+            alphaSolver.moveToEnd();
+            environmentLayersFolderItem = findItem( environmentItems[h].name + " Layers" );
+            environmentLayersFolderItem.parentFolder = assetsFolderItem ;
+        }
     }
     //Preparing the Content Composition.
     contentCompItem.openInViewer();
-    if( animationRefItem != null ){ contentCompItem.duration = animationRefItem.duration ; }
+    if( animationRefItem != null && contentCompItem.duration != animationRefItem.duration){
+        IV2editCompDuration( contentCompItem , animationRefItem.duration ); 
+    }
     //Adding the animatic to the content comp.
     if( animaticItem != null ){
         var animaticLayer = contentCompItem.layers.add( animaticItem );
@@ -387,7 +396,7 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
         animationRefLayer.locked = true ;
     }
     //Adding the animation layers to the content comp.
-    if( animationItems != [] ){
+    if( animationItems.length > 0 ){
         for( i = 0 ; i < animationItems.length ; i++ ){
             var animationLayer = contentCompItem.layers.add( animationItems[i] );
             animationLayer.label = 3 ;
@@ -396,15 +405,17 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
         }
     }
     //adding the environment to the content comp.
-    if( environmentItem != null ){
-        var environmentLayer = contentCompItem.layers.add( environmentItem );
-        environmentLayer.label = 5 ;
-        environmentLayer.name = "Environment" ;
-        environmentLayer.moveToEnd();
-        //Adjusting the Environment Comp duration to the content Comp.
-        if( environmentItem.duration != contentCompItem.duration ){
-            IV2editCompDuration( environmentItem , contentCompItem.duration );
-            environmentLayer.outPoint = environmentLayer.inPoint + environmentItem.duration ;
+    if( environmentItems.length > 0 ){
+        for( i = 0 ; i < environmentItems.length ; i++ ){
+            var environmentLayer = contentCompItem.layers.add( environmentItems[i] );
+            environmentLayer.label = 5 ;
+            environmentLayer.name = "Environment" ;
+            environmentLayer.moveToEnd();
+            //Adjusting the Environment Comp duration to the content Comp.
+            if( environmentItems[i].duration != contentCompItem.duration ){
+                IV2editCompDuration( environmentItems[i] , contentCompItem.duration );
+                environmentLayer.outPoint = environmentLayer.inPoint + environmentItems[i].duration ;
+            }
         }
     }
     //Triming the layers to Content Comp duration.
@@ -412,7 +423,9 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
     app.executeCommand( 2360 );//Executes the command "Trim Comp to Work Area".
     contentCompItem.layers[1].locked = true ;
     //Preparing the Main Composition.
-    if( animationRefItem != null ){ mainCompItem.duration = animationRefItem.duration ; }
+    if( animationRefItem != null && mainCompItem.duration != animationRefItem.duration ){
+        IV2editCompDuration( mainCompItem , animationRefItem.duration );
+    }
     for( i = 5 ; i <= mainCompItem.layers.length ; i++ ){
         mainCompItem.layers[i].audioEnabled = false ;
     }
@@ -443,12 +456,16 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
     //Saving the work done.
     app.project.save();
     //Displaying a warning about missing Assets.
-    if( animaticItem == null || animationRefItem == null || animationItems.length == 0 || environmentItem == null ){
+    if( animaticItem == null || animationRefItem == null || animationItems.length == 0 || missingEnvironment.length > 0 ){
         var missingAssets = "" ;
         if( animaticItem == null ){ missingAssets += " • Animatic not Found.\n" ; }
         if( animationRefItem == null ){ missingAssets += " • Animation Ref Video not Found.\n" ; }
         if( animationItems.length == 0 ){ missingAssets += " • Animation Layers not Found.\n" ; }
-        if( environmentItem == null){ missingAssets += " • Environment \"" + environmentAssetName + "\" not Found." ; }
+        if( missingEnvironment.length > 0){
+            for( i = 0 ; i < missingEnvironment.length ; i++ ){
+                missingAssets += " • Environment \"" + missingEnvironment[i] + "\" not Found.\n" ;
+            }
+        }
         printLostAssets( shotCode , missingAssets );
     } else {
         IV2dlg( "I'm Done!" , shotCode + " : " , "   I've done my part, now do yours!" );
@@ -582,6 +599,8 @@ function IV2choiceDlg( shot ){
                 var btnC = choiceDialog.global.btnsRow.add( "button" , undefined , "Open it!" );
                 btnC.size = [ 75 ,25 ];
     var isAgreed = false ;
+    choiceDialog.defaultElement = btnA ;
+    choiceDialog.cancelElement = btnC ;
     choiceDialog.onResizing = function(){ choiceDialog.layout.resize(); }
     btnA.onClick = function(){ isAgreed = "Crush" ; choiceDialog.close(); };
     btnB.onClick = function(){ isAgreed = "Cancel" ; choiceDialog.close(); };
