@@ -1,5 +1,5 @@
 //****************************************//
-//   IV2 toolbox v1.5
+//   IV2 toolbox v1.2.5
 //****************************************//
 
 $.localize = true;
@@ -7,13 +7,15 @@ creatingUI( this );
 //exportingShot();
 //creatingAEP( "104" , "50" , "120" );
 //IV2choiceDlg("Error" , "   The shot \"IV2_v1.0\" already exists.\n\n   Do you really want to overwrite it?" , "Crush it!" , "Let it Live!")
-
-//Creates the UI.
-//Return = Ø
+/**
+ * Creates the UI.
+ * @param { object } thisObj this.
+ */
 function creatingUI( thisObj ){
     
     var iv2Toolbox = thisObj ;
     iv2Toolbox.spacing = 2 ;
+    iv2Toolbox.alignment = [ "center" , "top" ];
     iv2Toolbox.shotLine = iv2Toolbox.add( "group" );
     iv2Toolbox.shotLine.orientation = "row" ;
     iv2Toolbox.shotLine.alignChildren = [ "fill" , "center" ];
@@ -27,9 +29,12 @@ function creatingUI( thisObj ){
     iv2Toolbox.btnsLine = iv2Toolbox.add( "group" );
     iv2Toolbox.btnsLine.spacing = 0 ;
     var createShot = iv2Toolbox.btnsLine.add( "button" , undefined , "Create" );
-    createShot.size = [ 75 , 25 ];
-    var ExportShot = iv2Toolbox.btnsLine.add( "button" , undefined , "Export" );
-    ExportShot.size = [ 75 , 25 ];
+    createShot.size = [ 50 , 25 ];
+    var exportShot = iv2Toolbox.btnsLine.add( "button" , undefined , "Export" );
+    exportShot.size = [ 50 , 25 ];
+    var sortExports = iv2Toolbox.btnsLine.add( "button" , undefined , "Sort");
+    sortExports.size = [ 50 , 25 ];
+    sortExports.helpTip = "Sort your exports according to the version."
     var updateScript = iv2Toolbox.btnsLine.add( "button" , undefined , "X" );
     updateScript.helpTip = "Updates the Script\nYou'll need to reboot After Effects." ;
     updateScript.size = [ 25 , 25 ];
@@ -43,14 +48,117 @@ function creatingUI( thisObj ){
     var savedShotNb = IV2getSavedString( "IV2toolboxSave" , "IV2shotNB" );
     if( savedShotNb != "" ){ shot.text = savedShotNb ; }
 
-
+    iv2Toolbox.onResizing = function(){ iv2Toolbox.layout.resize(); }
     episode.onActivate = function(){ episode.text = "" ; }
     sequence.onActivate = function(){ sequence.text = "" ; }
     shot.onActivate = function(){ shot.text = "" ; }
     createShot.onClick = function(){ creatingAEP( episode.text , sequence.text , shot.text ); }
-    ExportShot.onClick = exportingShot ;
+    exportShot.onClick = exportingShot ;
+    sortExports.onClick = sortingExports
     updateScript.onClick = updatingScript ;
     
+}
+/**
+ * Sorts the exports to only keep the last version of each shot.
+ */
+function sortingExports(){
+
+    var episodeFolder = episodeChoice();
+    if( !episodeFolder.exists ){ return }
+    //Getting the exports Files.
+    var exportsFolder = new Folder( episodeFolder.fsName + "/03_Exports" );
+    if( !exportsFolder.exists ){ exportsFolder.create(); }
+    var retakeFolder = new Folder( exportsFolder.fsName + "/02_RTK" );
+    if( !retakeFolder.exists ){ retakeFolder.create(); }
+    var exports = exportsFolder.getFiles( "IV2_*.mov" );
+    //Sorting the Exports by name of Shot.
+    var sortedExports = {};
+    for( var i = 0 ; i < exports.length ; i++ ){
+        var currentFile = exports[i];
+        var currentFileName = currentFile.name.slice( 4 , 16 );
+        var currentFileVersion = currentFile.name.slice( currentFile.name.search( /v[0-9]+/ ) + 1 , currentFile.name.search( /\.[0-9]+/ ) );
+        var currentFileSubVersion = currentFile.name.slice( currentFile.name.search( /\.[0-9]+/ ) + 1 , currentFile.name.search( ".mov" ) );
+        if( typeof sortedExports[ currentFileName ] === "undefined" ){ sortedExports[ currentFileName ] = new Array(); }
+        if( typeof sortedExports[ currentFileName ][ currentFileVersion ] === "undefined" ){ sortedExports[ currentFileName ][ currentFileVersion ] = new Array(); }
+        if( typeof sortedExports[ currentFileName ][ currentFileVersion ][ currentFileSubVersion ] === "undefined" ){ sortedExports[ currentFileName ][ currentFileVersion ][ currentFileSubVersion ] = new Array(); }
+        sortedExports[ currentFileName ][ currentFileVersion ][ currentFileSubVersion ] = currentFile ;
+    }
+    for( shot in sortedExports ){
+        var lastVersion = true ;
+        for( var j = sortedExports[ shot ].length ; j >= 0 ; j-- ){
+            if( typeof sortedExports[ shot ][j] !== "undefined" ){
+                for( var k = sortedExports[ shot ][j].length ; k >= 0 ; k-- ){
+                    if( typeof sortedExports[ shot ][j][k] !== "undefined" ){
+                        if( lastVersion ){
+                            lastVersion = false ;
+                            continue ;
+                        }
+                        sortedExports[ shot ][j][k].copy( retakeFolder.fsName + "/" + sortedExports[ shot ][j][k].name );
+                        sortedExports[ shot ][j][k].remove();
+                    }
+                }
+            }
+        }
+    }
+
+}
+/**
+ * Creates a UI asking for an episode name.
+ * @returns { object? } The Folder Object for the Episode Folder or Null.
+ */
+function episodeChoice(){
+
+    //Creating the UI asking what Episode to work on.
+    var episodeChoiceDlg = new Window( "dialog" , "Tell me what Episode to sort." );
+        var line01 = episodeChoiceDlg.add( "group" );
+            line01.add( "staticText" , undefined , "Episode : " );
+            var episode = line01.add( "editText{ text: 'XXX' , justify: 'center' }" );
+        var line02 = episodeChoiceDlg.add( "group" );
+            var sort = line02.add( "button" , undefined , "Sort" );
+            var cancel = line02.add( "button" , undefined , "Cancel" );
+    var episodeFolder = null ;
+    //UI Parameters.
+    episodeChoiceDlg.defaultElement = sort ;
+    //UI events.
+    episode.onActivate = function(){ episode.text = "" ; };
+    sort.onClick = function(){ episodeFolder = checkEpisodeNumber( episode.text ); if( episodeFolder != null && episodeFolder.exists ){ episodeChoiceDlg.close(); } };
+    cancel.onClick = function(){ episodeChoiceDlg.close(); return null };
+    //Showing UI.
+    episodeChoiceDlg.show();
+    //Returning the episodeFolder
+    return episodeFolder;
+
+}
+/**
+ * Checks if the episode nimber given by the user matches an actual Folder.
+ * @param { string } episodeNb Episode Number entered by the user.
+ * @returns { object? } The Folder Object for the Episode Folder or Null.
+ */
+function checkEpisodeNumber( episodeNb ){
+
+    if( isNaN( episodeNb ) || episodeNb < 101 || episodeNb > 140 ){ IV2dlg( "Error" , "Arg..." , "The number you entered is not one of any episode." ); return null ; }
+    //Getting the Ivandoe S02 Folder.
+    var iv2Folder = IV2getSavedString( "IV2toolboxSave" , "iv2Folder" );
+    if( iv2Folder == "" ){
+        iv2Folder = Folder.myDocuments.selectDlg( "Where is your \"IV2\" Folder?" );
+        if( iv2Folder != null ){
+            if( iv2Folder.name == "IV2" ){
+                IV2saveString( "IV2toolboxSave" ,  "iv2Folder" , iv2Folder.fsName );
+            } else {
+                IV2dlg( "Error" , undefined , "   You did not select a Folder named \"IV2\".");
+                return ;
+            }
+        } else {
+            return ;
+        }
+    } else {
+        iv2Folder = new Folder( iv2Folder );
+    }
+    //Checking if the searched episode folder exists.
+    var episodeFolder = new Folder( iv2Folder.fsName + "/IV2_Ep" + episodeNb );
+    if( !episodeFolder.exists ){ IV2dlg( "Error" , "Beuhhh" , "There is no Folder for that episode on this computer."); return null ; }
+    return episodeFolder ;
+
 }
 /**
  * Update the script from my Teamshare folder.
@@ -82,8 +190,9 @@ function copyFiles( item , destination ){
     }
 }
 
-//Adds the main Comp to the render queue.
-//Return = Ø
+/**
+ * Adds the main Comp to the render queue.
+ */
 function exportingShot(){
     if( app.project != undefined && app.project.file.name.search( "IV2" ) >= 0 ){
         //Cleaning the renderQueue
@@ -116,15 +225,19 @@ function exportingShot(){
         //Adding the Comp to the render queue.
         if( itemToExport != null && itemToExport.parentFolder == app.project.rootFolder ){
             var mainCompRender = app.project.renderQueue.items.add( itemToExport );
-            mainCompRender.applyTemplate( "MySettings - WorkAreaLength" );
+            mainCompRender.applyTemplate( "MySettings - CompLength" );
             mainCompRender.outputModules[1].applyTemplate( "AppleProRes 422 HQ" );
             mainCompRender.outputModules[1].file = new File( episodeFolder.fsName + "/03_Exports/" + itemToExport.name + ".mov" );
         }
     }
 }
-//Creates a AEP file for the asked shot.
-//episodeNb = String - number of the Episode | sequenceNb = String - number of the Sequence | shotNb = String - number of the Shot
-//Return = Ø
+/**
+ * Creates a AEP file for the asked shot. 
+ * @param { string } episodeNb Number of the Episode.
+ * @param { string } sequenceNb Number of the Sequence.
+ * @param { string } shotNb Number of the Shot.
+ * @returns 
+ */
 function creatingAEP( episodeNb , sequenceNb , shotNb ){
 
     //Cleaning the numbers entered by the user.
@@ -322,7 +435,7 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
         app.project.renderQueue.items[1].remove();
     }
     var mainCompRender = app.project.renderQueue.items.add( mainCompItem );
-    mainCompRender.applyTemplate( "MySettings - WorkAreaLength" );
+    mainCompRender.applyTemplate( "MySettings - CompLength" );
     mainCompRender.outputModules[1].applyTemplate( "AppleProRes 422 HQ" );
     mainCompRender.outputModules[1].file = new File( episodeFolder.fsName + "/03_Exports/" + mainCompItem.name + ".mov" );
     //Showing the content Comp.
@@ -342,29 +455,33 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
     }
 
 }
-//Opens a palette with the list of assets that have not been found.
-//shot = String - ShotCode for the shot | list = String - String saying what's missing.
-//Return = Ø
+/**
+ * Opens a palette with the list of assets that have not been found. 
+ * @param { string } shot ShotCode of the Shot.
+ * @param { string } list String listing the missing elements for the Shot.
+ */
 function printLostAssets( shot , list ){
 
-    var LostAssetsDlg = new Window( "palette" , "Lost Assets" , undefined , { borderless: true , resizeable: true } );
-    LostAssetsDlg.spacing = 2 ;
-    var ListPanel = LostAssetsDlg.add( "Panel" , undefined , "For shot : " + shot )
-    ListPanel.alignment = "Fill" ;
-    ListPanel.margins = [ 2 , 10 , 2 , 2 ] ;
-        var PropList = ListPanel.add( "edittext" , undefined , list , { multiline: true } );
+    var lostAssetsDlg = new Window( "palette" , "Lost Assets" , undefined , { borderless: true , resizeable: true } );
+    lostAssetsDlg.spacing = 2 ;
+    var listPanel = lostAssetsDlg.add( "Panel" , undefined , "For shot : " + shot )
+    listPanel.alignment = "Fill" ;
+    listPanel.margins = [ 2 , 10 , 2 , 2 ] ;
+        var PropList = listPanel.add( "edittext" , undefined , list , { multiline: true } );
         PropList.preferredSize = [ 200  , -1 ];
-    var Btn = LostAssetsDlg.add( "button" , undefined , "Exit" );
+    var Btn = lostAssetsDlg.add( "button" , undefined , "Exit" );
     Btn.size = [ 75 , 25 ];
     Btn.alignment = "Center";
-    LostAssetsDlg.onResizing = function(){ LostAssetsDlg.layout.resize(); }
-    Btn.onClick = function(){ LostAssetsDlg.close(); }
-    LostAssetsDlg.show();
+    lostAssetsDlg.onResizing = function(){ lostAssetsDlg.layout.resize(); }
+    Btn.onClick = function(){ lostAssetsDlg.close(); }
+    lostAssetsDlg.show();
 
 }
-//Modifies a comp, and its component, duration to match the value set.
-//item = Object - the item to modify | durationWanted = number - Duration the user want
-//Return = Ø
+/**
+ * Modifies a comp duration, and its component's, to match the value set. 
+ * @param { object } item Item Object to modify.
+ * @param { number } durationWanted Duration the user wants.
+ */
 function IV2editCompDuration( item , durationWanted ){
 
     if( item.typeName == "Composition" && item.duration != durationWanted ){
@@ -386,9 +503,13 @@ function IV2editCompDuration( item , durationWanted ){
     }
 
 }
-//Checks if the user entry is a number and return a string with the number of digits wanted
-//numberName = String - Name of the number | entry = String - String given by the user | digitsNb = number - number of digits wanted for the final string
-//Return = String or null - String containing the number entered with the number of digits wanted
+/**
+ * Checks if the user entry is a number and return a string with the number of digits wanted. 
+ * @param { string } numberName Name of the Number.
+ * @param { string } entry String given by the User.
+ * @param { number } digitsNb number of digits wanted for the final string.
+ * @returns { string? } string with the number of digits wanted or null.
+ */
 function cleanNumberString( numberName , entry , digitsNb){
 
     entry = parseInt( entry , 10 );
@@ -404,9 +525,11 @@ function cleanNumberString( numberName , entry , digitsNb){
     return entry ;
 
 }
-//Parses the items of the project to find an item matching the entered name.
-//,ame = String - Name of the item searched
-//Return = Object or null - item matching the name.
+/**
+ * Parses the items of the project to find an item matching the entered name. 
+ * @param { string } itemName Name of the Item searched.
+ * @returns { object? } the Item Object with matching name or Null.
+ */
 function findItem( itemName ){
 
     for( var i = 1 ; i <= app.project.items.length ; i++ ){
@@ -418,9 +541,12 @@ function findItem( itemName ){
     return null ;
 
 }
-//Opens a dialog with a message for the user.
-//Title = String - Name of the Dialog | Content = String - Message displayed
-//Return = Ø
+/**
+ * Opens a dialog with a message for the user.
+ * @param { string } Title Name of the dialog.
+ * @param { string } PanelName Name of the Panel.
+ * @param { string } Content Message displayed.
+ */
 function IV2dlg( Title , PanelName , Content ){
     
     var IV2dialog = new Window( "dialog" , Title , undefined , { borderless: true } );
@@ -433,8 +559,11 @@ function IV2dlg( Title , PanelName , Content ){
     IV2dialog.show();
       
 }
-//Opens a dialog giving a choice to the user.
-//title = String - Name of the Dialog | messageContent = String- Message displayed | (Optional) messageBtnA = String - Text on the first Button | (Optional) messageBtnB = String - Text on the second Button
+/**
+ * Opens a dialog giving a choice to the user. 
+ * @param { string } shot ShotCode for the Shot. 
+ * @returns { string } Name of the choice made.
+ */
 //Return = Boolean
 function IV2choiceDlg( shot ){
 
@@ -461,21 +590,21 @@ function IV2choiceDlg( shot ){
     return isAgreed ;
 
 }
-
-//Saves a String inside a given txt file in the user roaming folder
-//SaveFileName = String - Name of the text file | StringName = String - Name of the String | StringToSave = String - The actual String
-//Return = Ø
+/**
+ * Saves a String inside a given txt file in the user roaming folder. 
+ * @param { string } SaveFileName Name of the txt file in the userData Folder. 
+ * @param { string } StringName CodeName for the String to save.
+ * @param { string } StringToSave Actual String to save.
+ */
 function IV2saveString( SaveFileName , StringName , StringToSave ){
 
     var SaveFile = new File( Folder.userData.fsName + "/" + SaveFileName + ".txt" );
-    if( SaveFile.exists )
-    {
+    if( SaveFile.exists ){
         SaveFile.open( "r" );
         var SaveFileString = SaveFile.read();
         SaveFile.close()
         var StringNameIndex = SaveFileString.search( StringName );
-        if( StringNameIndex != -1 )
-        {
+        if( StringNameIndex != -1 ){
             var StringStartIndex = StringNameIndex + StringName.length + 1 ;
             var StringEndIndex = SaveFileString.search( "</Path" + StringName + ">" );
             var OldString = SaveFileString.slice( StringStartIndex , StringEndIndex );
@@ -492,27 +621,26 @@ function IV2saveString( SaveFileName , StringName , StringToSave ){
     SaveFile.close();
 
 }
-
-//Gets a string from a given text file in the user roaming folder
-//SaveFileName = String - Name of the text file | StringName = String - Name of the String
-//Return = String ou null
+/**
+ * Gets a string from a given text file in the user roaming folder. 
+ * @param { string } SaveFileName Name of the txt file in the userData Folder.
+ * @param { string } StringName CodeName for the String to save.
+ * @returns { string } The saved string matching the Codename or "".
+ */
 function IV2getSavedString( SaveFileName , StringName ){
 
     //Finding the text file
     var SaveFile = new File( Folder.userData.fsName + "/" + SaveFileName + ".txt" );
-    if( SaveFile.exists )
-    {
+    if( SaveFile.exists ){
         SaveFile.open( "r" );
         var SaveFileString = SaveFile.read();
         SaveFile.close();
     } else {
         return "" ;
     }
-
     //Getting the String
     var StringNameIndex = SaveFileString.search( StringName );
-    if( StringNameIndex != -1 )
-    {
+    if( StringNameIndex != -1 ){
         var StringStartIndex = StringNameIndex + StringName.length + 1 ;
         var StringEndIndex = SaveFileString.search( "</Path" + StringName + ">" );
         var String = SaveFileString.slice( StringStartIndex , StringEndIndex );
