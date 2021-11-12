@@ -1,5 +1,5 @@
 //****************************************//
-//   IV2 toolbox v1.2.6
+//   IV2 toolbox v1.3.6
 //****************************************//
 
 $.localize = true;
@@ -399,8 +399,10 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
     if( animationItems.length > 0 ){
         for( i = 0 ; i < animationItems.length ; i++ ){
             var animationLayer = contentCompItem.layers.add( animationItems[i] );
+            contentCompItem.layers.precompose( [ animationLayer.index ] , animationLayer.name.slice( 7 , animationLayer.name.length - 4 ) );
+            animationLayer = contentCompItem.layers[1];
+            animationLayer.name = animationLayer.name ;
             animationLayer.label = 3 ;
-            animationLayer.name = animationLayer.name.slice( 7 , animationLayer.name.length - 4 );
             animationLayer.moveToEnd();
         }
     }
