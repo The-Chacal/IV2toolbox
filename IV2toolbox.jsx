@@ -1,5 +1,5 @@
 //****************************************//
-//   IV2 toolbox v1.3.6
+//   IV2 toolbox v1.3.7
 //****************************************//
 
 $.localize = true;
@@ -164,7 +164,7 @@ function checkEpisodeNumber( episodeNb ){
  * Update the script from my Teamshare folder.
  */
 function updatingScript(){
-    var scriptFolder = new Folder( "//peps/studioPEP/TEAM SHARE/Sylvain LORENT/ScriptsAE" );
+    var scriptFolder = new Folder( "//peps/studioPEP/TEAM SHARE/Sylvain LORENT/ScriptsAE/IV2toolbox" );
     var scriptFiles = scriptFolder.getFiles( "IV2toolbox*" );
     var targetFolder = new Folder( Folder.userData.fsName + "/Adobe/After Effects/18.4/Scripts/ScriptUI Panels" );
     if( !targetFolder.exists ){ targetFolder.create(); }
