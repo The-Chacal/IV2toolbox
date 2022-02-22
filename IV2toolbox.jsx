@@ -399,7 +399,7 @@ function creatingAEP( episodeNb , sequenceNb , shotNb ){
     if( animationItems.length > 0 ){
         for( i = 0 ; i < animationItems.length ; i++ ){
             var animationLayer = contentCompItem.layers.add( animationItems[i] );
-            contentCompItem.layers.precompose( [ animationLayer.index ] , animationLayer.name.slice( 7 , animationLayer.name.length - 4 ) );
+            contentCompItem.layers.precompose( [ animationLayer.index ] , episodeNb + "_" + sequenceNb + "_" + shotNb + " - " + animationLayer.name.slice( 7 , animationLayer.name.length - 4 ) , false );
             animationLayer = contentCompItem.layers[1];
             animationLayer.name = animationLayer.name ;
             animationLayer.label = 3 ;
