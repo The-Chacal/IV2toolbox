@@ -1,7 +1,6 @@
 //****************************************//
-//   IV2 toolbox v1.3.7
+//   IV2 toolbox v1.3.8
 //****************************************//
-
 $.localize = true;
 creatingUI( this );
 //exportingShot();
@@ -625,11 +624,10 @@ function IV2saveString( SaveFileName , StringName , StringToSave ){
         var SaveFileString = SaveFile.read();
         SaveFile.close()
         var StringNameIndex = SaveFileString.search( StringName );
-        if( StringNameIndex != -1 ){
-            var StringStartIndex = StringNameIndex + StringName.length + 1 ;
+        if( StringNameIndex >= 0 ){
             var StringEndIndex = SaveFileString.search( "</Path" + StringName + ">" );
-            var OldString = SaveFileString.slice( StringStartIndex , StringEndIndex );
-            SaveFileString = SaveFileString.replace( OldString , StringToSave );
+            var OldString = SaveFileString.slice( StringNameIndex , StringEndIndex );
+            SaveFileString = SaveFileString.replace( OldString , StringName + ">" + StringToSave );
         } else {
             SaveFileString = SaveFileString.concat( "<Path" + StringName + ">" + StringToSave + "</Path" + StringName + ">\r\n" );
         }
@@ -669,5 +667,4 @@ function IV2getSavedString( SaveFileName , StringName ){
     } else {
         return "" ;
     }
-
 }
